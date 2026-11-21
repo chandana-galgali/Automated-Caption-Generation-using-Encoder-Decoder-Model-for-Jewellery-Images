@@ -1,0 +1,165 @@
+"""Export the trained models to ONNX so the website can run them in the browser.
+
+    python training/export_onnx.py --weights backend/weights --out frontend/public/model
+
+Works for both the original (v1) and the retrained (v2) weights. Produces
+    backbone.onnx     image (1,3,224,224)            -> fmap (1,512,7,7)      VGG-16, run once
+    classifier.onnx   fmap                           -> probs (1,2)
+    cap_init.onnx     fmap                           -> h, feats, proj        decoder start state
+    cap_step.onnx     token (B,) int32, h, feats, proj -> logp (B,V), h_out   one decoding step
+    config.json       vocabulary, special tokens, decoding + preprocessing settings
+    index_*.bin/json  retrieval index (if present)
+and then checks that ONNX Runtime reproduces the PyTorch outputs and the
+complete beam-search description for the sample images.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
+from caption_model import CLASS_NAMES, JewelleryAnalyzer, beam_search, detokenize, transform  # noqa: E402
+
+OPSET = 17
+
+
+class Backbone(nn.Module):
+    def __init__(self, a):
+        super().__init__(); self.f = a.classifier.features
+
+    def forward(self, image):
+        return self.f(image)
+
+
+class ClassifierHead(nn.Module):
+    def __init__(self, a):
+        super().__init__(); self.c = a.classifier
+
+    def forward(self, fmap):
+        return torch.softmax(self.c.head(fmap), dim=1)
+
+
+class CapInit(nn.Module):
+    def __init__(self, a):
+        super().__init__(); self.a = a
+
+    def forward(self, fmap):
+        if self.a.version == 2:
+            s = self.a.captioner.encode(fmap)
+            return s["h"], s["feats"], s["proj"]
+        h = self.a.encoder.head(fmap)
+        z = torch.zeros(1, 1, 1) + 0 * h.sum()  # placeholders (v1 has no attention)
+        return h, z, z + 0
+
+
+class CapStep(nn.Module):
+    def __init__(self, a):
+        super().__init__(); self.a = a
+
+    def forward(self, token, h, feats, proj):
+        tok = token.long()
+        if self.a.version == 2:
+            logits, st, _ = self.a.captioner.step(tok, {"h": h, "feats": feats, "proj": proj})
+            h_out = st["h"]
+        else:
+            logits, hid = self.a.decoder.step(tok, h.unsqueeze(0))
+            h_out = hid.squeeze(0) + 0 * feats.sum() + 0 * proj.sum()  # keep inputs in the graph
+        return F.log_softmax(logits, dim=-1), h_out
+
+
+def export(module, args, path, inputs, outputs, dynamic):
+    torch.onnx.export(module, args, str(path), input_names=inputs, output_names=outputs,
+                      dynamic_axes=dynamic, opset_version=OPSET, do_constant_folding=True, dynamo=False)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--weights", default=ROOT / "backend" / "weights", type=Path)
+    ap.add_argument("--out", default=ROOT / "frontend" / "public" / "model", type=Path)
+    ap.add_argument("--no-check", action="store_true")
+    args = ap.parse_args()
+    out = args.out
+    out.mkdir(parents=True, exist_ok=True)
+
+    a = JewelleryAnalyzer(args.weights, device="cpu")
+    for m in (a.classifier, getattr(a, "captioner", None), getattr(a, "encoder", None), getattr(a, "decoder", None)):
+        if m is not None:
+            m.eval()
+    print(f"loaded model v{a.version}, vocab {len(a.vocab)}, default mode {a.default_mode}")
+
+    img = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        fmap = a.classifier.features(img)
+        h, feats, proj = CapInit(a)(fmap)
+        export(Backbone(a), (img,), out / "backbone.onnx", ["image"], ["fmap"], None)
+        export(ClassifierHead(a), (fmap,), out / "classifier.onnx", ["fmap"], ["probs"], None)
+        export(CapInit(a), (fmap,), out / "cap_init.onnx", ["fmap"], ["h", "feats", "proj"], None)
+        tok = torch.tensor([1, 4, 5], dtype=torch.int32)
+        H, Fe, P = (t.expand(3, *t.shape[1:]).contiguous() for t in (h, feats, proj))
+        export(CapStep(a), (tok, H, Fe, P), out / "cap_step.onnx", ["token", "h", "feats", "proj"], ["logp", "h_out"],
+               {"token": {0: "B"}, "h": {0: "B"}, "feats": {0: "B"}, "proj": {0: "B"}, "logp": {0: "B"}, "h_out": {0: "B"}})
+
+    itos = [a.vocab.itos[i] for i in range(len(a.vocab))]
+    cfg = {
+        "version": a.version, "class_names": CLASS_NAMES, "itos": itos,
+        "special": {k: a.vocab.stoi[k] for k in ("<PAD>", "<START>", "<END>", "<UNK>")},
+        "beam": a.beam_size, "max_len": a.max_len, "no_repeat_ngram": 3,
+        "default_mode": a.default_mode, "has_index": a.index is not None,
+        "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225], "size": 224,
+    }
+    if a.index is not None:
+        a.index.features.numpy().astype(np.float16).tofile(out / "index_features.bin")
+        a.index.labels.numpy().astype(np.int8).tofile(out / "index_labels.bin")
+        (out / "index_captions.json").write_text(json.dumps(a.index.captions), encoding="utf-8")
+        cfg["index_size"] = len(a.index)
+    (out / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+    for p in sorted(out.iterdir()):
+        print(f"  {p.name:22s} {p.stat().st_size / 1e6:7.2f} MB")
+
+    if not args.no_check:
+        check(a, out)
+
+
+def check(a, out):
+    """ONNX Runtime must reproduce PyTorch outputs and the full beam-search caption."""
+    import onnxruntime as ort
+    s = {n: ort.InferenceSession(str(out / f"{n}.onnx"), providers=["CPUExecutionProvider"])
+         for n in ("backbone", "classifier", "cap_init", "cap_step")}
+    samples = sorted((ROOT / "test_images").glob("*"))[:5]
+    for path in samples:
+        image = Image.open(path).convert("RGB")
+        x = transform(image).unsqueeze(0)
+        with torch.no_grad():
+            fmap_t = a.classifier.features(x)
+            probs_t = torch.softmax(a.classifier.head(fmap_t), 1)
+            caption_t = a.generate(fmap_t, x)
+        fmap = s["backbone"].run(None, {"image": x.numpy()})[0]
+        probs = s["classifier"].run(None, {"fmap": fmap})[0]
+        h, feats, proj = s["cap_init"].run(None, {"fmap": fmap})
+        assert np.allclose(fmap, fmap_t.numpy(), atol=1e-3, rtol=1e-3), "backbone mismatch"
+        assert np.allclose(probs, probs_t.numpy(), atol=1e-4), "classifier mismatch"
+
+        def step(tokens, st):
+            B = tokens.shape[0]
+            logp, h_out = s["cap_step"].run(None, {
+                "token": tokens.numpy().astype(np.int32), "h": st["h"].numpy(),
+                "feats": np.repeat(feats, B, 0), "proj": np.repeat(proj, B, 0)})
+            return torch.from_numpy(logp), {"h": torch.from_numpy(h_out)}
+
+        words = beam_search(step, {"h": torch.from_numpy(h)}, a.vocab, a.beam_size, a.max_len)
+        caption_o = detokenize(words)
+        assert caption_o == caption_t, f"caption mismatch:\n onnx  {caption_o}\n torch {caption_t}"
+        print(f"  OK {path.name}: {CLASS_NAMES[int(probs.argmax())]} ({probs.max():.3f}) | {caption_o}")
+    print("ONNX export verified against PyTorch.")
+
+
+if __name__ == "__main__":
+    main()

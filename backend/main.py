@@ -26,7 +26,7 @@ import torch
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from caption_model import JewelleryAnalyzer
 
@@ -91,6 +91,7 @@ async def analyze(file: UploadFile = File(...),
     try:
         image = Image.open(io.BytesIO(data))
         image.load()
+        image = ImageOps.exif_transpose(image)  # phone photos: honour the camera rotation
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
         raise HTTPException(400, "Please upload a valid image file (JPG, PNG or WEBP).")
 

@@ -6,7 +6,7 @@
 ![React](https://img.shields.io/badge/Frontend-React-61dafb)
 ![CI](https://github.com/chandana-galgali/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images/actions/workflows/ci.yml/badge.svg)
 
-**Live demo:** _add your Hugging Face Space link here once deployed (see [Deployment](#-deployment))_
+**🔗 Live demo: [chandana-galgali.github.io/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images](https://chandana-galgali.github.io/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images/)**: the trained models run directly in your browser, with no server and no sign-up.
 
 An end-to-end computer-vision and NLP application. Upload a photo of a piece of jewellery and it **classifies** the item (earring or necklace) and writes a **natural-language description** of it, covering metal, stones, shape and style. It uses a VGG-16 encoder with GRU-based decoders, served by a FastAPI backend with a React frontend.
 
@@ -43,7 +43,7 @@ backend/                FastAPI app + model code
   caption_model.py      Model definitions + inference pipeline
   weights/              Trained weights
   tests/                pytest suite
-frontend/               React + Tailwind UI (drag & drop, paste, sample images)
+frontend/               React + Tailwind UI; runs the models in the browser on GitHub Pages
 training/               Dataset preparation, training + evaluation pipeline, metrics
 results/                Metrics, plots and test-set predictions of the latest training run
 notebooks/              Original notebooks + Kaggle training notebook
@@ -51,7 +51,6 @@ dataset/                Label files and the 53-image external test set
 project documents/      Report, technical paper, poster, presentations, architecture, screenshots
 experiments/            Earlier Gemini LLM baseline (not used by the app)
 test_images/            Sample images
-deploy/huggingface/     Hugging Face Space files (live demo)
 Dockerfile              One-container build (frontend + backend)
 ```
 
@@ -73,7 +72,7 @@ npm install
 npm start
 ```
 
-**Or with Docker:** `docker build -t jewellery-analyzer .` then `docker run -p 7860:7860 jewellery-analyzer`, and open http://localhost:7860.
+**Or with Docker:** `docker build -t jewellery-analyzer .` then `docker run -p 8000:8000 jewellery-analyzer`, and open http://localhost:8000.
 
 ### API
 
@@ -110,12 +109,16 @@ All are computed on a held-out test split and on 53 external web images. Trainin
 
 ## 🌐 Deployment
 
-The live demo runs as a free Hugging Face Space (Docker, CPU), which builds straight from this GitHub repository:
+The live demo is a static website on **GitHub Pages**. The trained PyTorch models are exported to ONNX and run in the visitor's browser with ONNX Runtime Web, so the demo is free, always on and needs no server. On every push to `main`, [`.github/workflows/pages.yml`](.github/workflows/pages.yml):
 
-1. Create a Space at https://huggingface.co/new-space, choosing **Docker → Blank** and **CPU basic** (free).
-2. Upload the two files from [`deploy/huggingface/`](deploy/huggingface): `Dockerfile` and `README.md`.
-3. Wait for the build (~10 min). The app is then live at `https://huggingface.co/spaces/<username>/<space-name>`.
-4. After pushing to GitHub, use **Settings → Factory rebuild** on the Space to update it.
+1. exports `backend/weights` to ONNX (`training/export_onnx.py`) and checks that ONNX reproduces the PyTorch predictions and descriptions exactly;
+2. builds the React app in browser mode (`REACT_APP_INFERENCE=browser`);
+3. opens the built site in headless Chromium and analyses a sample image and an uploaded image (end-to-end test);
+4. publishes the site only if all of the above pass.
+
+Image decoding and resizing in the browser reproduce Pillow bit for bit (`frontend/src/browserModel.js`), so the website gives the same results as the Python backend. The model (~75 MB) is downloaded once and then cached by the browser.
+
+The FastAPI backend can also be self-hosted on any server with Docker: `docker build -t jewellery-analyzer .` then `docker run -p 8000:8000 jewellery-analyzer`.
 
 ## 📁 Dataset
 
@@ -128,7 +131,7 @@ The dataset was built from open Hugging Face jewellery datasets (*AI Tool Pool J
 
 ## 🛠️ Tech stack
 
-PyTorch · Torchvision · FastAPI · Uvicorn · React · Tailwind CSS · Axios · NumPy · Matplotlib · NLTK · Pillow · Docker · GitHub Actions
+PyTorch · Torchvision · ONNX / ONNX Runtime Web · FastAPI · Uvicorn · React · Tailwind CSS · NumPy · Matplotlib · NLTK · Pillow · Docker · GitHub Actions · GitHub Pages
 
 ## 👥 Team
 

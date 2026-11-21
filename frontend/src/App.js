@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Upload, Loader2, Scan, Gem, AlertCircle, RotateCcw, Code, Cpu } from 'lucide-react';
+import { BrowserModel } from './browserModel';
 
 // Same origin by default (the FastAPI backend serves this app). During development
 // the "proxy" field in package.json forwards API calls to http://localhost:8000.
 const API_URL = process.env.REACT_APP_API_URL || '';
+// "browser" = run the exported ONNX models on the visitor's device (static hosting, e.g. GitHub Pages)
+const BROWSER = process.env.REACT_APP_INFERENCE === 'browser';
+const MODEL_URL = `${process.env.PUBLIC_URL}/model/`;
 const REPO_URL =
   'https://github.com/chandana-galgali/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images';
 
@@ -17,10 +21,9 @@ const SAMPLES = [
   { src: 'samples/necklace-3.jpg', label: 'Layered necklace' },
 ];
 
-const MAX_SIDE = 640; // the model only needs 224x224; shrinking first makes uploads fast
+const MAX_SIDE = 2048; // only very large photos are shrunk before upload
 
-// Downscale large photos in the browser and flatten transparency onto white
-// (the training images are mostly product shots on white backgrounds).
+// Downscale very large photos before uploading them to the API and flatten transparency onto white.
 async function prepareImage(file) {
   const url = URL.createObjectURL(file);
   try {
@@ -31,6 +34,7 @@ async function prepareImage(file) {
       i.src = url;
     });
     const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+    if (scale === 1 && file.type !== 'image/png') return file; // send the original pixels
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(img.width * scale);
     canvas.height = Math.round(img.height * scale);
@@ -54,9 +58,25 @@ function App() {
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState('checking'); // checking | online | offline
+  const [loadMsg, setLoadMsg] = useState('');
   const inputRef = useRef(null);
+  const modelRef = useRef(null);
 
   useEffect(() => {
+    if (!BROWSER) return undefined;
+    modelRef.current = BrowserModel.load(MODEL_URL, setLoadMsg);
+    modelRef.current.then(
+      () => setStatus('online'),
+      (e) => {
+        setStatus('offline');
+        setLoadMsg(e.message);
+      }
+    );
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    if (BROWSER) return undefined;
     let cancelled = false;
     const ping = () =>
       axios
@@ -94,12 +114,21 @@ function App() {
     setError('');
     setResult(null);
     try {
+      if (BROWSER) {
+        const model = await modelRef.current;
+        setResult(await model.analyze(target));
+        return;
+      }
       const body = new FormData();
       body.append('file', await prepareImage(target), target.name || 'image.jpg');
       const { data } = await axios.post(`${API_URL}/analyze`, body, { timeout: 60000 });
       setResult(data);
       setStatus('online');
     } catch (err) {
+      if (BROWSER) {
+        setError(err.message || 'Analysis failed.');
+        return;
+      }
       setError(
         err.response
           ? err.response.data?.detail || `Server error (${err.response.status})`
@@ -141,7 +170,13 @@ function App() {
   };
 
   const statusColor = { online: 'bg-emerald-500', offline: 'bg-red-400', checking: 'bg-amber-400' }[status];
-  const statusText = { online: 'Model online', offline: 'Model offline', checking: 'Connecting…' }[status];
+  const statusText = BROWSER
+    ? {
+        online: 'Model ready · runs in your browser',
+        offline: `Model failed to load${loadMsg ? `: ${loadMsg}` : ''}`,
+        checking: loadMsg || 'Loading model…',
+      }[status]
+    : { online: 'Model online', offline: 'Model offline', checking: 'Connecting…' }[status];
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-6 bg-stone-100 text-stone-800">
@@ -246,7 +281,11 @@ function App() {
           {loading ? (
             <div className="text-center text-stone-400 flex flex-col items-center">
               <Loader2 className="w-10 h-10 mb-4 animate-spin text-emerald-700" />
-              <p className="font-serif italic">Encoding image and generating description…</p>
+              <p className="font-serif italic">
+                {BROWSER && status !== 'online'
+                  ? 'Downloading the model (first visit only)…'
+                  : 'Encoding image and generating description…'}
+              </p>
             </div>
           ) : !result ? (
             <div className="text-center text-stone-300 flex flex-col items-center">
