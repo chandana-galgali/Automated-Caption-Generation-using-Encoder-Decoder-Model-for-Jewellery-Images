@@ -1,0 +1,11 @@
+.git
+**/node_modules
+frontend/build
+**/__pycache__
+**/.env
+docs
+dataset
+notebooks
+experiments
+test_images
+deploy
