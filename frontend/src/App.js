@@ -283,7 +283,7 @@ function App() {
               <Loader2 className="w-10 h-10 mb-4 animate-spin text-emerald-700" />
               <p className="font-serif italic">
                 {BROWSER && status !== 'online'
-                  ? 'Downloading the model (first visit only)…'
+                  ? `${loadMsg || 'Downloading the model…'} First visit only; later visits are instant.`
                   : 'Encoding image and generating description…'}
               </p>
             </div>

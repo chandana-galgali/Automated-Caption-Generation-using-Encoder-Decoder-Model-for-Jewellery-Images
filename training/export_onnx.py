@@ -134,6 +134,15 @@ def main():
         a.index.labels.numpy().astype(np.int8).tofile(out / "index_labels.bin")
         (out / "index_captions.json").write_text(json.dumps(a.index.captions), encoding="utf-8")
         cfg["index_size"] = len(a.index)
+    # file sizes (for the download progress bar) and a content hash used as the browser cache key
+    import hashlib
+    digest = hashlib.sha256()
+    cfg["files"] = {}
+    for p in sorted(out.iterdir()):
+        if p.name != "config.json":
+            cfg["files"][p.name] = p.stat().st_size
+            digest.update(p.name.encode()); digest.update(p.read_bytes())
+    cfg["model_id"] = digest.hexdigest()[:16]
     (out / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
     for p in sorted(out.iterdir()):
         print(f"  {p.name:22s} {p.stat().st_size / 1e6:7.2f} MB")

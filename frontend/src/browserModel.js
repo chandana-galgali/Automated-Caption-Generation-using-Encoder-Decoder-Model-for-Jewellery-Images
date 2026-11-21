@@ -255,6 +255,76 @@ async function imageToTensorData(file, cfg) {
   return out;
 }
 
+// ---------------------------------------------------------------- downloads
+// Large model files are downloaded with progress reporting, resumed with HTTP Range
+// requests if the connection drops, and kept in Cache Storage (keyed by the model id,
+// so a retrained model replaces the old one automatically).
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function downloadBytes(url, onBytes, attempts = 6) {
+  let chunks = [];
+  let received = 0;
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fetch(url, received ? { headers: { Range: `bytes=${received}-` } } : {});
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url.split('/').pop()}`);
+      if (received && res.status !== 206) {
+        chunks = []; // server ignored the Range request: start this file again
+        received = 0;
+      }
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        onBytes(received);
+      }
+      const out = new Uint8Array(received);
+      let offset = 0;
+      for (const c of chunks) {
+        out.set(c, offset);
+        offset += c.length;
+      }
+      return out;
+    } catch (e) {
+      lastError = e;
+      await sleep(1500 * (attempt + 1));
+    }
+  }
+  throw new Error(`Download failed after ${attempts} attempts (${lastError && lastError.message}). Please check your connection and reload.`);
+}
+
+async function openCache(modelId) {
+  try {
+    if (!('caches' in window)) return null;
+    const name = `jewellery-model-${modelId}`;
+    for (const k of await caches.keys()) if (k.startsWith('jewellery-model-') && k !== name) await caches.delete(k);
+    return await caches.open(name);
+  } catch {
+    return null; // private mode / unsupported: fall back to the normal HTTP cache
+  }
+}
+
+async function getFile(cache, url, onBytes) {
+  if (cache) {
+    try {
+      const hit = await cache.match(url);
+      if (hit) {
+        const bytes = new Uint8Array(await hit.arrayBuffer());
+        onBytes(bytes.length);
+        return bytes;
+      }
+    } catch {
+      /* ignore cache errors */
+    }
+  }
+  const bytes = await downloadBytes(url, onBytes);
+  if (cache) cache.put(url, new Response(bytes)).catch(() => {});
+  return bytes;
+}
+
 // ---------------------------------------------------------------- model
 export class BrowserModel {
   static async load(baseUrl, onProgress = () => {}) {
@@ -262,22 +332,45 @@ export class BrowserModel {
     const m = new BrowserModel();
     m.ort = ort;
     onProgress('Loading model configuration…');
-    m.cfg = await (await fetch(`${baseUrl}config.json`)).json();
-    const opts = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' };
+    const cfgRes = await fetch(`${baseUrl}config.json`, { cache: 'no-cache' });
+    if (!cfgRes.ok) throw new Error(`Model configuration not found (HTTP ${cfgRes.status})`);
+    m.cfg = await cfgRes.json();
+    const cache = await openCache(m.cfg.model_id || 'default');
+
     const names = ['backbone', 'classifier', 'cap_init', 'cap_step'];
-    m.sessions = {};
-    for (const n of names) {
-      onProgress(`Downloading ${n} model…`);
-      m.sessions[n] = await ort.InferenceSession.create(`${baseUrl}${n}.onnx`, opts);
+    const extra = m.cfg.has_index ? ['index_features.bin', 'index_labels.bin', 'index_captions.json'] : [];
+    const files = [...names.map((n) => `${n}.onnx`), ...extra];
+    const sizes = m.cfg.files || {};
+    const totalMB = files.reduce((t, f) => t + (sizes[f] || 0), 0) / 1e6;
+    const done = {};
+    const report = () => {
+      const mb = Object.values(done).reduce((a, b) => a + b, 0) / 1e6;
+      onProgress(
+        totalMB
+          ? `Downloading model… ${mb.toFixed(0)} / ${totalMB.toFixed(0)} MB (${Math.min(100, Math.round((100 * mb) / totalMB))}%)`
+          : `Downloading model… ${mb.toFixed(0)} MB`
+      );
+    };
+    const bytes = {};
+    for (const f of files) {
+      bytes[f] = await getFile(cache, `${baseUrl}${f}`, (n) => {
+        done[f] = n;
+        report();
+      });
     }
+
+    onProgress('Starting the model…');
+    const opts = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' };
+    m.sessions = {};
+    for (const n of names) m.sessions[n] = await ort.InferenceSession.create(bytes[`${n}.onnx`], opts);
     if (m.cfg.has_index) {
-      onProgress('Downloading description index…');
-      const [f, l, c] = await Promise.all([
-        fetch(`${baseUrl}index_features.bin`).then((r) => r.arrayBuffer()),
-        fetch(`${baseUrl}index_labels.bin`).then((r) => r.arrayBuffer()),
-        fetch(`${baseUrl}index_captions.json`).then((r) => r.json()),
-      ]);
-      m.index = { features: fp16ToFloat32(new Uint16Array(f)), labels: new Int8Array(l), captions: c };
+      const f = bytes['index_features.bin'];
+      const l = bytes['index_labels.bin'];
+      m.index = {
+        features: fp16ToFloat32(new Uint16Array(f.buffer, f.byteOffset, f.byteLength / 2)),
+        labels: new Int8Array(l.buffer, l.byteOffset, l.byteLength),
+        captions: JSON.parse(new TextDecoder().decode(bytes['index_captions.json'])),
+      };
     }
     m.special = {
       start: m.cfg.special['<START>'], end: m.cfg.special['<END>'],
