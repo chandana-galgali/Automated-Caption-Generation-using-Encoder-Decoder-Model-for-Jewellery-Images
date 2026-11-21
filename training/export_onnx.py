@@ -110,12 +110,15 @@ def main():
     with torch.no_grad():
         fmap = a.classifier.features(img)
         h, feats, proj = CapInit(a)(fmap)
-        export(Backbone(a), (img,), out / "backbone.onnx", ["image"], ["fmap"], None)
-        export(ClassifierHead(a), (fmap,), out / "classifier.onnx", ["fmap"], ["probs"], None)
-        export(CapInit(a), (fmap,), out / "cap_init.onnx", ["fmap"], ["h", "feats", "proj"], None)
+        # Wrappers are put in eval mode BEFORE export: torch.onnx.export restores the wrapper's
+        # original mode afterwards, and a fresh nn.Module starts in training mode, which would
+        # silently switch the registered caption model (with dropout) into training mode.
+        export(Backbone(a).eval(), (img,), out / "backbone.onnx", ["image"], ["fmap"], None)
+        export(ClassifierHead(a).eval(), (fmap,), out / "classifier.onnx", ["fmap"], ["probs"], None)
+        export(CapInit(a).eval(), (fmap,), out / "cap_init.onnx", ["fmap"], ["h", "feats", "proj"], None)
         tok = torch.tensor([1, 4, 5], dtype=torch.int32)
         H, Fe, P = (t.expand(3, *t.shape[1:]).contiguous() for t in (h, feats, proj))
-        export(CapStep(a), (tok, H, Fe, P), out / "cap_step.onnx", ["token", "h", "feats", "proj"], ["logp", "h_out"],
+        export(CapStep(a).eval(), (tok, H, Fe, P), out / "cap_step.onnx", ["token", "h", "feats", "proj"], ["logp", "h_out"],
                {"token": {0: "B"}, "h": {0: "B"}, "feats": {0: "B"}, "proj": {0: "B"}, "logp": {0: "B"}, "h_out": {0: "B"}})
 
     itos = [a.vocab.itos[i] for i in range(len(a.vocab))]
@@ -150,6 +153,11 @@ def check(a, out, tie_margin=0.01):
       (average log-probability per word). A real export bug gives large gaps.
     """
     import onnxruntime as ort
+    for m in (a.classifier, getattr(a, "captioner", None), getattr(a, "encoder", None), getattr(a, "decoder", None)):
+        if m is not None:
+            m.eval()
+    if a.version == 2:
+        assert not a.captioner.training and not a.captioner.drop.training, "reference model must be in eval mode"
     s = {n: ort.InferenceSession(str(out / f"{n}.onnx"), providers=["CPUExecutionProvider"])
          for n in ("backbone", "classifier", "cap_init", "cap_step")}
     stoi = a.vocab.stoi
