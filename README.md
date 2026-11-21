@@ -5,12 +5,17 @@
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)
 ![React](https://img.shields.io/badge/Frontend-React-61dafb)
 ![CI](https://github.com/chandana-galgali/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images/actions/workflows/ci.yml/badge.svg)
+[![Dataset on Kaggle](https://img.shields.io/badge/Dataset-Kaggle-20beff)](https://www.kaggle.com/datasets/chandanagalgali/jewellery-dataset)
 
-**🔗 Live demo: [chandana-galgali.github.io/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images](https://chandana-galgali.github.io/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images/)**: the trained models run directly in your browser, with no server and no sign-up.
+**🔗 [Try the live demo](https://chandana-galgali.github.io/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images/)**. The model runs directly in your browser; there's nothing to install.
 
-An end-to-end computer-vision and NLP application. Upload a photo of a piece of jewellery and it **classifies** the item (earring or necklace) and writes a **natural-language description** of it, covering metal, stones, shape and style. It uses a VGG-16 encoder with GRU-based decoders, served by a FastAPI backend with a React frontend.
+Upload a photo of a piece of jewellery and the system **classifies** it (earring or necklace) and **writes a natural-language description** of it, covering metal, stones, shape and style. For example:
 
-B.Tech (Information Technology) final-year project, K. J. Somaiya College of Engineering, Somaiya Vidyavihar University (2025). The report, synopsis, technical paper, poster and all presentations are in [`project documents/`](project%20documents).
+> *"A pair of gold earrings adorned with ruby and emerald gemstones, arranged in a floral pattern."* (a real output on the test set)
+
+It is built on a **VGG-16 encoder with GRU decoders** (PyTorch), with a **React** frontend and a **FastAPI** backend.
+
+B.Tech (Information Technology) final-year project, K. J. Somaiya College of Engineering, Somaiya Vidyavihar University (2025). The report, technical paper, poster and presentations are in [`project documents/`](project%20documents).
 
 ## 📊 Results
 
@@ -62,125 +67,140 @@ Training time: 7.2 min on Tesla T4.
 ![Training curves](results/training_curves.png)
 <!-- METRICS:END -->
 
-## 🏗️ Architecture
+## 🏗️ How it works
 
 ![Architecture](project%20documents/System%20Architecture.jpg)
 
-1. **Encoder.** The image is resized to 224×224, ImageNet-normalised and passed **once** through a frozen, ImageNet-pretrained VGG-16, giving a 7×7×512 feature map (49 image regions).
-2. **Classifier (VGG-16 → GRU).** The 49 region vectors are read as a sequence by a GRU (hidden 256), and a linear layer predicts *Earring* or *Necklace*.
-3. **Description decoder (VGG-16 → attention GRU).** A GRU language model (embedding 256, hidden 512) with soft attention over the 49 regions ("Show, Attend and Tell"). At every word it looks at the relevant part of the image. Captions are decoded with beam search (k = 3).
-4. **Description retrieval (baseline).** The most similar training image of the predicted type, by cosine similarity of the same VGG-16 features, provides a reference description. Generation or retrieval becomes the app's default, whichever scores higher on the **validation** set.
+1. **Encoder.** The image is resized to 224×224, ImageNet-normalised and passed once through a frozen, ImageNet-pretrained **VGG-16**, giving a 7×7×512 feature map (49 image regions).
+2. **Classifier (VGG-16 → GRU).** A GRU (hidden size 256) reads the 49 region vectors as a sequence, and a linear layer predicts *Earring* or *Necklace*.
+3. **Caption decoder (VGG-16 → attention GRU).** A GRU language model (embedding 256, hidden 512) with soft attention over the 49 regions ("Show, Attend and Tell") writes the description word by word, looking at the relevant part of the image at each step. Decoding uses beam search (k = 3).
+4. **Retrieval baseline.** For comparison, the system can also return the description of the most similar training image, using cosine similarity of the same VGG-16 features. Generation scored higher on the validation set, so it is the default.
 
-### Engineering details
+**Training setup**
+- **Leakage-free splits.** The 70 / 15 / 15 train / validation / test split is grouped by photo, so duplicate photos and identical descriptions never appear in two splits.
+- **Augmentation** (random crop, flip, rotation, colour jitter) is applied to training images only: 5 extra views per image.
+- **Fast training.** The frozen VGG-16 features are computed once and cached, so training takes minutes on a single GPU.
+- **Model selection.** The best epoch is chosen on the validation set (macro-F1 for the classifier, CIDEr-D for the captioner), and the test sets are used only for the final numbers.
 
-- **One VGG-16 pass per image**, shared by the classifier and the description decoder.
-- **Feature caching during training.** The frozen VGG-16 features of every image (plus 5 augmented views per training image) are computed once, so all heads train in minutes on a single GPU.
-- **Leakage-free splits.** Train, validation and test are split by photo, with duplicate photos and identical descriptions grouped together. Augmentation is applied only to training images, on the fly.
-- **Incremental, batched decoding** with the GRU state carried forward.
-- The models load once at server start-up, and the frontend downscales images before upload.
+## 📁 Dataset
 
-## 📂 Repository structure
+**[Jewellery Dataset on Kaggle](https://www.kaggle.com/datasets/chandanagalgali/jewellery-dataset)**: 5,406 images (3,548 earrings and 1,858 necklaces) with descriptions and a fixed train / validation / test split, plus 53 external web images for testing.
+
+The images come from open Hugging Face datasets (*AI Tool Pool Jewelry Vision*, `imnaveenk/necklace`, `Bhargav1127/necklace-dataset-with-captions`) and manually collected photos (jhumkas, natural backgrounds, worn by a person). Details are in [`dataset/README.md`](dataset/README.md).
 
 ```
-backend/                FastAPI app + model code
-  main.py               API: POST /analyze, GET /health; also serves the built frontend
-  caption_model.py      Model definitions + inference pipeline
-  weights/              Trained weights
-  tests/                pytest suite
-frontend/               React + Tailwind UI; runs the models in the browser on GitHub Pages
-training/               Dataset preparation, training + evaluation pipeline, metrics
-results/                Metrics, plots and test-set predictions of the latest training run
-notebooks/              Original notebooks + Kaggle training notebook
-dataset/                Label files and the 53-image external test set
-project documents/      Report, technical paper, poster, presentations, architecture, screenshots
-experiments/            Earlier Gemini LLM baseline (not used by the app)
-test_images/            Sample images
-Dockerfile              One-container build (frontend + backend)
+jewellery-dataset/
+├── images/            5,406 images (JPEG, longer side 512 px)
+├── labels.csv         id, file, description, type, split (train/val/test), group, source
+└── external_test/     53 web images + labels.csv
 ```
 
-## 🚀 Run locally
+## 🚀 Getting started
+
+### 1. Clone
+
+```bash
+git clone https://github.com/chandana-galgali/Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images.git
+cd Automated-Caption-Generation-using-Encoder-Decoder-Model-for-Jewellery-Images
+```
+
+The trained weights are included in [`backend/weights/`](backend/weights), so the app works straight away.
+
+### 2. Run the app
 
 **Requirements:** Python 3.10+ and Node.js 18+.
 
 ```bash
-# 1. Backend (http://localhost:8000, interactive API docs at /docs)
+# Backend: http://localhost:8000 (interactive API docs at /docs)
 cd backend
 python -m venv .venv
 .venv\Scripts\activate             # Windows   (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
+```
 
-# 2. Frontend (new terminal, http://localhost:3000)
+```bash
+# Frontend: http://localhost:3000 (new terminal)
 cd frontend
 npm install
 npm start
 ```
 
-**Or with Docker:** `docker build -t jewellery-analyzer .` then `docker run -p 8000:8000 jewellery-analyzer`, and open http://localhost:8000.
+Open http://localhost:3000, then upload a photo or click one of the sample images.
 
-### API
+**With Docker** (frontend and backend in one container): `docker build -t jewellery-analyzer .`, then `docker run -p 8000:8000 jewellery-analyzer`, and open http://localhost:8000.
+
+### 3. Use the API
 
 ```bash
 curl -F "file=@test_images/1.jpeg" http://localhost:8000/analyze
 ```
 
-Response fields: `type`, `confidence`, `description`, `method` (`generated` or `retrieved`), `generated_description` and `inference_ms`. Use `?mode=generate` or `?mode=retrieve` to choose the description method explicitly.
+The response contains `type`, `confidence`, `description`, `inference_ms` and `method`. Add `?mode=retrieve` to get the retrieval baseline's description instead.
 
-## 🧪 Training and evaluation
-
-Everything (training, model selection and evaluation) is one command. The test sets are used only for the final evaluation.
+### 4. Run the tests
 
 ```bash
-# 1. Build the dataset package from the raw image folders (once)
-python training/prepare_dataset.py --raw ../Dataset --labels dataset/labels/master_labels.csv \
-    --external ../Dataset/DESCRIPTION_TEST_DATA --external-labels dataset/test_set/labels.csv \
-    --out ../jewellery-dataset
+cd backend && pip install pytest httpx && pytest -q     # API + model tests
+cd frontend && npm test                                 # UI tests
+```
 
-# 2. Train + evaluate (GPU recommended; on Kaggle use notebooks/04_kaggle_train_and_evaluate.ipynb)
-python training/run_all.py --data ../jewellery-dataset --out run
+The same tests, plus a small end-to-end training run on synthetic data, run on every push through [GitHub Actions](.github/workflows/ci.yml).
 
-# 3. Install the trained weights, metrics and plots, and update this README
+## 🧪 Train and evaluate it yourself
+
+One script does everything: feature extraction, training both models, model selection on validation, and final evaluation on the test sets. It writes the weights, `metrics.json`, `METRICS.md`, plots and per-image predictions. It takes about **7 minutes on a free T4 GPU**.
+
+**Option A: Kaggle (free GPU, easiest).** Import [`notebooks/04_kaggle_train_and_evaluate.ipynb`](notebooks/04_kaggle_train_and_evaluate.ipynb) into Kaggle. Add the [jewellery-dataset](https://www.kaggle.com/datasets/chandanagalgali/jewellery-dataset) as input, choose a GPU with Internet on, and click **Run All**.
+
+**Option B: Google Colab (free GPU).** Download the dataset zip from Kaggle into your Google Drive, open [`notebooks/05_colab_train_and_evaluate.ipynb`](notebooks/05_colab_train_and_evaluate.ipynb), select a T4 GPU and click **Run all**.
+
+**Option C: your own machine (GPU recommended).**
+
+```bash
+pip install -r training/requirements.txt          # plus PyTorch for your system: https://pytorch.org
+kaggle datasets download -d chandanagalgali/jewellery-dataset --unzip -p data
+python training/run_all.py --data data --out run
+```
+
+**Use your trained model in the app.** The following command copies the new weights into `backend/weights/` and the metrics and plots into `results/`, and refreshes the Results section of this README:
+
+```bash
 python training/install_results.py run.zip
 ```
 
-Reported metrics:
-
-- **Classification:** accuracy, precision, recall and F1 per class and macro-averaged, ROC-AUC and the confusion matrix.
+**Metrics reported:**
+- **Classification:** accuracy, precision, recall, F1 (per class and macro), ROC-AUC and the confusion matrix.
 - **Descriptions:** BLEU-1 to BLEU-4, METEOR, ROUGE-L and CIDEr-D.
-- **Speed:** CPU latency.
+- **Speed:** CPU inference latency.
 
-All are computed on a held-out test split and on 53 external web images. Training curves and per-image test predictions are saved to [`results/`](results).
+## 📂 Project structure
 
-## 🌐 Deployment
+```
+backend/                FastAPI app: API (main.py), models + inference (caption_model.py), trained weights, tests
+frontend/               React + Tailwind web app (upload, drag & drop, sample images)
+training/               run_all.py (train + evaluate), metrics.py, prepare_dataset.py, export_onnx.py, install_results.py
+results/                Metrics, confusion matrix, training curves and test-set predictions of the current model
+notebooks/              Original project notebooks + Kaggle / Colab training notebooks
+dataset/                Label files and the 53-image external test set
+project documents/      Report, technical paper, poster, presentations, architecture diagram, screenshots
+experiments/            Earlier LLM (Gemini) baseline, not used by the app
+test_images/            Sample images for trying the app
+```
 
-The live demo is a static website on **GitHub Pages**. The trained PyTorch models are exported to ONNX and run in the visitor's browser with ONNX Runtime Web, so the demo is free, always on and needs no server. On every push to `main`, [`.github/workflows/pages.yml`](.github/workflows/pages.yml):
+## ⚠️ Limitations and future work
 
-1. exports `backend/weights` to ONNX (`training/export_onnx.py`) and checks that ONNX reproduces the PyTorch predictions and descriptions exactly;
-2. builds the React app in browser mode (`REACT_APP_INFERENCE=browser`);
-3. opens the built site in headless Chromium and analyses a sample image and an uploaded image (end-to-end test);
-4. publishes the site only if all of the above pass.
-
-Image decoding and resizing in the browser reproduce Pillow bit for bit (`frontend/src/browserModel.js`), so the website gives the same results as the Python backend. The model (~75 MB) is downloaded once and then cached by the browser.
-
-The FastAPI backend can also be self-hosted on any server with Docker: `docker build -t jewellery-analyzer .` then `docker run -p 8000:8000 jewellery-analyzer`.
-
-## 📁 Dataset
-
-The dataset was built from open Hugging Face jewellery datasets (*AI Tool Pool Jewelry Vision*, `imnaveenk/necklace`, `Bhargav1127/necklace-dataset-with-captions`) plus manually collected images: 5,406 photos (3,548 earrings and 1,858 necklaces), 5,306 of them with a description. See [`dataset/README.md`](dataset/README.md). The image folders are not stored in this repository.
-
-## ⚠️ Limitations
-
-- Only two classes: earrings and necklaces. Other jewellery is forced into one of the two, and the UI flags low-confidence results.
-- Most training photos are product shots on plain backgrounds, so performance on worn or busy-background photos is lower. The external test set measures this.
+- **Two classes only.** Rings, bracelets and other jewellery are forced into earring or necklace; the app flags low-confidence results.
+- **Mostly product photos.** Most training images are product shots on plain backgrounds, so descriptions of photos taken in the wild are less accurate (see the external test results). More varied training photos would help.
+- **Next steps:** add more jewellery types, fine-tune the upper VGG-16 layers, and try a transformer decoder.
 
 ## 🛠️ Tech stack
 
-PyTorch · Torchvision · ONNX / ONNX Runtime Web · FastAPI · Uvicorn · React · Tailwind CSS · NumPy · Matplotlib · NLTK · Pillow · Docker · GitHub Actions · GitHub Pages
+PyTorch · Torchvision · FastAPI · React · Tailwind CSS · ONNX Runtime Web · NumPy · Pillow · Matplotlib · Docker · GitHub Actions
 
 ## 👥 Team
 
-Tanisha Mangaonkar · Prachi Gandhi · Chandana Galgali · Mahek Thakkar
-Guide: Prof. Avani Sakhapara, Department of Information Technology, KJSCE
+Chandana Galgali · Tanisha Mangaonkar · Prachi Gandhi · Mahek Thakkar | Guide: Prof. Avani Sakhapara | Department of Information Technology | K. J. Somaiya College of Engineering
 
 ## 📄 License
 

@@ -20,4 +20,5 @@
 
 The result is 5,406 images: 3,548 earrings and 1,858 necklaces. 100 earring photos have no description and are used for classification only. Augmentation (random crop, flip, rotation and colour jitter) is applied on the fly to training images only, inside `training/run_all.py`.
 
-The raw image folders (~450 MB) and the prepared package (~140 MB) are kept outside this repository.
+**Download:** the prepared dataset (images + `labels.csv` with the fixed split + external test set, ~120 MB) is published on Kaggle: **[kaggle.com/datasets/chandanagalgali/jewellery-dataset](https://www.kaggle.com/datasets/chandanagalgali/jewellery-dataset)**.
+It is not stored in this repository because of its size.

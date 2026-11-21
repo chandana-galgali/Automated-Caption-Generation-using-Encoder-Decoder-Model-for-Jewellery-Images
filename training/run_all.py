@@ -78,6 +78,17 @@ def set_seed(seed):
 
 
 # ------------------------------------------------------------------- data
+def find_dataset(root):
+    """Return the folder that contains labels.csv (handles zips extracted into a sub-folder)."""
+    if (root / "labels.csv").exists():
+        return root
+    hits = sorted(p.parent for p in root.rglob("labels.csv") if p.parent.name != "external_test")
+    if not hits:
+        sys.exit(f"labels.csv not found under {root} - download the dataset from "
+                 "https://www.kaggle.com/datasets/chandanagalgali/jewellery-dataset")
+    return hits[0]
+
+
 def load_data(root):
     rows = list(csv.DictReader(open(root / "labels.csv", encoding="utf-8")))
     for r in rows:
@@ -369,6 +380,7 @@ def main():
     ap.add_argument("--smoke", action="store_true", help="tiny CPU run with random weights (pipeline test)")
     args = ap.parse_args()
 
+    args.data = find_dataset(args.data)
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dev_name = torch.cuda.get_device_name(0) if device.type == "cuda" else f"CPU ({platform.processor() or 'unknown'})"
