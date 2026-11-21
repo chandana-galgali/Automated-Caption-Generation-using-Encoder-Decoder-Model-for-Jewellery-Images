@@ -1,0 +1,54 @@
+image_path,description,jewelry_type
+DESCRIPTION_TEST_DATA/1.webp,"A sleek two-layer gold chain necklace featuring smooth, polished strands that drape gracefully for a modern, minimal look.",necklace
+DESCRIPTION_TEST_DATA/2.jpg,"A refined dual-layer gold necklace designed with delicate chains and curved bar accents, adding a subtle touch of elegance and everyday sophistication.",necklace
+DESCRIPTION_TEST_DATA/3.jpg,"A graceful three-layer gold necklace crafted with fine beaded chains, creating a lightweight, layered look that blends tradition with contemporary charm.",necklace
+DESCRIPTION_TEST_DATA/4.jpg,"A statement three-strand gold beaded necklace featuring graduated layers of intricate beads, offering a rich and luxurious layered silhouette.",necklace
+DESCRIPTION_TEST_DATA/5.jpeg,"An exquisite double-layer necklace adorned with brilliant white stones and deep blue oval gems, finished with a striking blue teardrop pendant for a regal, high-glamour look.",necklace
+DESCRIPTION_TEST_DATA/6.jpg,"A classic gold chain necklace featuring a smooth, refined design that adds a subtle touch of everyday elegance.",necklace
+DESCRIPTION_TEST_DATA/7.jpg,"A delicate gold necklace adorned with two rows of shimmering white stones, finished with a sparkling floral pendant that adds a graceful, timeless charm.",necklace
+DESCRIPTION_TEST_DATA/8.jpg,"A pair of sparkling diamond stud earrings featuring round center stones surrounded by a delicate halo for a timeless, radiant look.",earring
+DESCRIPTION_TEST_DATA/9.jpg,"A pair of elegant drop earrings crafted with three cascading teardrop-shaped white stones, offering a sleek and refined shine.",earring
+DESCRIPTION_TEST_DATA/10.jpg,"A pair of minimalist pearl drop earrings featuring smooth white pearls suspended from slender silver hooks for a soft, classic finish.",earring
+DESCRIPTION_TEST_DATA/11.jpg,"A pair of graceful gold drop earrings adorned with lustrous teardrop-shaped pearls, creating a sophisticated and feminine touch.",earring
+DESCRIPTION_TEST_DATA/12.jpg,A pair of modern gold open-hoop earrings featuring a textured circular design that adds a bold yet effortless style statement.,earring
+DESCRIPTION_TEST_DATA/13.jpg,"A pair of striking drop earrings showcasing deep green teardrop stones framed with shimmering white crystals for a luxurious, eye-catching sparkle.",earring
+DESCRIPTION_TEST_DATA/14.jpg,A pair of gold-toned round stud earrings featuring a radiant sunburst design framed with sparkling white stones for a vintage-inspired shine.,earring
+DESCRIPTION_TEST_DATA/15.jpg,"A pair of ornate silver jhumka earrings adorned with intricate stonework and delicate pearl drops, offering a classic and festive traditional look.",earring
+DESCRIPTION_TEST_DATA/16.jpg,"A pair of elegant drop earrings showcasing deep red teardrop stones set beneath shimmering white heart-shaped crystals for a bold, romantic sparkle.",earring
+DESCRIPTION_TEST_DATA/17.jpg,"A pair of graceful drop earrings featuring two cascading teardrop-shaped white stones surrounded by a halo of crystals for a soft, luminous shine.",earring
+DESCRIPTION_TEST_DATA/18.jpg,"A statement necklace crafted with an intricate lattice of shimmering stones, finished with striking green oval gems for a luxurious, contemporary elegance.",necklace
+DESCRIPTION_TEST_DATA/19.jpg,"A grand gold necklace featuring bold geometric patterns and layered detailing, creating a rich, traditional bridal look with a regal finish.",necklace
+DESCRIPTION_TEST_DATA/20.webp,"A traditional temple-inspired gold necklace adorned with intricate carvings, colored stones, and dangling motifs for a majestic, heritage-rich appearance.",necklace
+DESCRIPTION_TEST_DATA/21.webp,"A delicate gold chain necklace featuring a smooth, polished heart pendant for a sweet and timeless touch.",necklace
+DESCRIPTION_TEST_DATA/22.jpg,A shimmering collar-style necklace adorned with repeating teardrop-shaped white stones for a refined and sparkling look.,necklace
+DESCRIPTION_TEST_DATA/23.jpg,"A stylish layered gold necklace pairing a tiny star charm with a bold round medallion for a chic, modern statement.",necklace
+DESCRIPTION_TEST_DATA/24.jpg,"A classic gold beaded necklace highlighted by a central drop motif and a single red stone, adding a rich traditional charm.",necklace
+DESCRIPTION_TEST_DATA/25.jpg,"A slim gold chain necklace featuring a vivid oval emerald stone framed with delicate detailing for a subtle, elegant pop of color.",necklace
+DESCRIPTION_TEST_DATA/26.jpg,A delicate silver chain necklace featuring a single teardrop-shaped purple gemstone pendant.,necklace
+DESCRIPTION_TEST_DATA/27.jpg,A sleek gold necklace with a small round clear crystal pendant that adds a subtle touch of elegance.,necklace
+DESCRIPTION_TEST_DATA/28.jpg,"A charming gold necklace adorned with a textured flower-shaped pendant for a soft, feminine look.",necklace
+DESCRIPTION_TEST_DATA/29.jpg,A dainty gold chain necklace showcasing a circular white stone surrounded by sparkling accents.,necklace
+DESCRIPTION_TEST_DATA/30.jpg,"A striking silver necklace embellished with alternating green stones and intricate silver detailing in a bold, symmetrical design.",necklace
+DESCRIPTION_TEST_DATA/31.jpg,An ornate oxidized silver necklace decorated with engraved coin charms and a large intricately crafted central pendant.,necklace
+DESCRIPTION_TEST_DATA/32.jpg,"A luxurious multi-strand pearl necklace featuring gold and green accents, completed with an elaborate pendant set with gemstones and pearls.",necklace
+DESCRIPTION_TEST_DATA/33.jpg,"A refined rose-gold necklace composed of delicate floral-shaped links, each adorned with shimmering clear stones.",necklace
+DESCRIPTION_TEST_DATA/34.jpg,A delicate rose gold lariat necklace featuring a sparkling butterfly charm with two slim drop chains accented by a crystal and a polished bead.,necklace
+DESCRIPTION_TEST_DATA/35.webp,"A radiant necklace designed with alternating round and rectangular stones, finished with a shimmering teardrop pendant for a refined, classic sparkle.",necklace
+DESCRIPTION_TEST_DATA/36.webp,"A minimalist silver chain necklace featuring a dainty carved flower pendant for a soft, feminine touch.",necklace
+DESCRIPTION_TEST_DATA/37.jpeg,"A sleek silver necklace adorned with a lustrous teardrop pearl suspended from a sparkling stone-studded bail for an elegant, timeless look.",necklace
+DESCRIPTION_TEST_DATA/38.jpg,A luxurious choker necklace showcasing deep red oval stones framed by clusters of shimmering white crystals for a bold and regal finish.,necklace
+DESCRIPTION_TEST_DATA/39.webp,"A pair of ornate gold drop earrings featuring intricate circular motifs and cascading floral charms for a rich, traditional look.",earring
+DESCRIPTION_TEST_DATA/40.webp,"A pair of classic gold jhumkas adorned with detailed carvings and a dome-shaped drop for a timeless, festive elegance.",earring
+DESCRIPTION_TEST_DATA/41.webp,A pair of polished silver knot studs designed with intertwining loops for a sleek and modern everyday style.,earring
+DESCRIPTION_TEST_DATA/42.jpeg,"A pair of oxidized silver jhumkas featuring engraved dome tops and dangling beads for an earthy, ethnic charm.",earring
+DESCRIPTION_TEST_DATA/43.jpg,A pair of grand gold jhumkas embellished with pearly teardrop tops and layered pearl detailing for a luxurious bridal finish.,earring
+DESCRIPTION_TEST_DATA/44.webp,A pair of striking ruby stud earrings framed with shimmering white stones for a bold and elegant sparkle.,earring
+DESCRIPTION_TEST_DATA/45.jpeg,A pair of delicate teardrop-shaped diamond studs offering a refined and classic touch of brilliance.,earring
+DESCRIPTION_TEST_DATA/46.jpg,A pair of rose-gold drop earrings featuring lustrous pearls topped with sparkling crystal caps for a soft and feminine glow.,earring
+DESCRIPTION_TEST_DATA/47.jpeg,A pair of vibrant emerald stud earrings framed with shimmering white stones for a bright and elegant pop of color.,earring
+DESCRIPTION_TEST_DATA/48.jpg,A pair of modern rose-gold earrings designed with open triangle frames and a sparkling floral stone cluster for a chic contemporary look.,earring
+DESCRIPTION_TEST_DATA/49.jpeg,"A bold traditional necklace adorned with intricate goldwork and vibrant red and green stones for a rich, festive finish.",necklace
+DESCRIPTION_TEST_DATA/50.avif,A pair of eye-catching teardrop earrings featuring multicolored faceted crystals framed with a sparkling halo for a dazzling statement look.,earring
+DESCRIPTION_TEST_DATA/51.webp,A pair of silver hook earrings featuring delicate butterfly motifs and smooth turquoise oval stones for a charming boho touch.,earring
+DESCRIPTION_TEST_DATA/52.webp,"A pair of timeless pearl studs offering a clean, elegant finish perfect for everyday or formal wear.",earring
+DESCRIPTION_TEST_DATA/53.png,"A grand gold temple-style necklace embellished with intricate motifs, red center stones, and dangling turquoise teardrops for a regal, heritage-inspired look.",necklace
