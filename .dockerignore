@@ -3,9 +3,12 @@
 frontend/build
 **/__pycache__
 **/.env
-docs
 dataset
 notebooks
 experiments
 test_images
 deploy
+backend/tests
+training
+.github
+Project Documents
