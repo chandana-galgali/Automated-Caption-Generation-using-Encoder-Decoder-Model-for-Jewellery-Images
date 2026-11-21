@@ -49,28 +49,38 @@ class ClassifierHead(nn.Module):
 
 class CapInit(nn.Module):
     def __init__(self, a):
-        super().__init__(); self.a = a
+        super().__init__()
+        self.version = a.version
+        if a.version == 2:
+            self.cap = a.captioner  # registered as sub-modules so their weights export as initializers
+        else:
+            self.enc = a.encoder
 
     def forward(self, fmap):
-        if self.a.version == 2:
-            s = self.a.captioner.encode(fmap)
+        if self.version == 2:
+            s = self.cap.encode(fmap)
             return s["h"], s["feats"], s["proj"]
-        h = self.a.encoder.head(fmap)
+        h = self.enc.head(fmap)
         z = torch.zeros(1, 1, 1) + 0 * h.sum()  # placeholders (v1 has no attention)
         return h, z, z + 0
 
 
 class CapStep(nn.Module):
     def __init__(self, a):
-        super().__init__(); self.a = a
+        super().__init__()
+        self.version = a.version
+        if a.version == 2:
+            self.cap = a.captioner
+        else:
+            self.dec = a.decoder
 
     def forward(self, token, h, feats, proj):
         tok = token.long()
-        if self.a.version == 2:
-            logits, st, _ = self.a.captioner.step(tok, {"h": h, "feats": feats, "proj": proj})
+        if self.version == 2:
+            logits, st, _ = self.cap.step(tok, {"h": h, "feats": feats, "proj": proj})
             h_out = st["h"]
         else:
-            logits, hid = self.a.decoder.step(tok, h.unsqueeze(0))
+            logits, hid = self.dec.step(tok, h.unsqueeze(0))
             h_out = hid.squeeze(0) + 0 * feats.sum() + 0 * proj.sum()  # keep inputs in the graph
         return F.log_softmax(logits, dim=-1), h_out
 
@@ -93,6 +103,7 @@ def main():
     for m in (a.classifier, getattr(a, "captioner", None), getattr(a, "encoder", None), getattr(a, "decoder", None)):
         if m is not None:
             m.eval()
+            m.requires_grad_(False)  # export needs frozen weights
     print(f"loaded model v{a.version}, vocab {len(a.vocab)}, default mode {a.default_mode}")
 
     img = torch.randn(1, 3, 224, 224)
