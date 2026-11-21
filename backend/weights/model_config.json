@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "captioner": {
+    "embed_size": 256,
+    "hidden_size": 512,
+    "attn_size": 256,
+    "dropout": 0.3
+  },
+  "default_caption_mode": "generate",
+  "trained_on": "2026-11-21",
+  "vocab_size": 794
+}
