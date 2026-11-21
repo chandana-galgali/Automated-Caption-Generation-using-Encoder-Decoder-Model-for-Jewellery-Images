@@ -5,7 +5,8 @@ Endpoints
 ---------
 POST /analyze   multipart image upload (field ``file``) ->
                 {"type", "confidence", "description", "method", "inference_ms"}
-                optional query param ``mode=generate`` forces pure GRU generation
+                optional ``mode``: auto (default chosen on the validation set),
+                generate (GRU decoder) or retrieve (nearest training description)
 GET  /health    readiness check + model info
 
 If a production build of the React frontend exists (``frontend/build`` or
@@ -46,10 +47,11 @@ async def lifespan(_app):
     torch.set_num_threads(max(1, os.cpu_count() or 1))
     device = "cuda" if torch.cuda.is_available() else "cpu"
     t = time.perf_counter()
-    analyzer = JewelleryAnalyzer(WEIGHTS_DIR, device=device, caption_index=CAPTION_INDEX)
+    analyzer = JewelleryAnalyzer(WEIGHTS_DIR, device=device,
+                                 caption_index=CAPTION_INDEX if Path(CAPTION_INDEX).exists() else None)
     analyzer.analyze(Image.new("RGB", (224, 224), "white"))  # warm-up
     print(f"Models ready on {device} in {time.perf_counter() - t:.1f}s "
-          f"(shared backbone: {analyzer.shared_backbone}, caption index: {analyzer.index is not None})")
+          f"(model v{analyzer.version}, default caption mode: {analyzer.default_mode})")
     yield
 
 
@@ -71,6 +73,8 @@ def health():
         "status": "ok",
         "device": str(analyzer.device),
         "vocab_size": len(analyzer.vocab),
+        "model_version": analyzer.version,
+        "default_caption_mode": analyzer.default_mode,
         "shared_backbone": analyzer.shared_backbone,
         "caption_index_size": len(analyzer.index) if analyzer.index else 0,
     }
@@ -78,7 +82,7 @@ def health():
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...),
-                  mode: str = Query("auto", pattern="^(auto|generate)$")):
+                  mode: str = Query("auto", pattern="^(auto|generate|retrieve)$")):
     data = await file.read()
     if not data:
         raise HTTPException(400, "Empty upload.")

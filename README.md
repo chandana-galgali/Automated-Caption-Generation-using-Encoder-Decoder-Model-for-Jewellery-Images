@@ -8,63 +8,49 @@
 
 **Live demo:** _add your Hugging Face Space link here once deployed (see [Deployment](#-deployment))_
 
-An end-to-end computer-vision and NLP application. Upload a jewellery photo and it **classifies** the item (earring or necklace) and returns a **natural-language description** of it, covering metal, stones, shape and style. The system is built on a VGG-16 image encoder with GRU recurrent networks. It is served by a FastAPI backend with a React frontend.
+An end-to-end computer-vision and NLP application. Upload a photo of a piece of jewellery and it **classifies** the item (earring or necklace) and writes a **natural-language description** of it, covering metal, stones, shape and style. It uses a VGG-16 encoder with GRU-based decoders, served by a FastAPI backend with a React frontend.
 
-B.Tech (Information Technology) final-year project, K. J. Somaiya College of Engineering, Somaiya Vidyavihar University (2025). The report, papers, poster and all presentations are in [`Project Documents/`](Project%20Documents).
+B.Tech (Information Technology) final-year project, K. J. Somaiya College of Engineering, Somaiya Vidyavihar University (2025). The report, synopsis, technical paper, poster and all presentations are in [`project documents/`](project%20documents).
 
-## ✨ Results
+## 📊 Results
 
-**From the project report** (validation split of the augmented dataset):
-
-| Metric | Value |
-|---|---|
-| Dataset size (after augmentation) | **32,190 images** |
-| Jewellery type classification accuracy | **94.62%** |
-| Caption model next-word accuracy (teacher-forced) | **90.44%** |
-
-**On 53 unseen web images** ([`dataset/test_set`](dataset/test_set), run with `python training/evaluate.py`):
-
-| Metric | Value |
-|---|---|
-| Classification accuracy | **96.2%** (51/53) |
-| Description BLEU-4: feature-matched catalogue description (default) | **0.045** |
-| Description BLEU-4: free GRU generation | 0.011 |
-| Description names the correct jewellery type: feature-matched / GRU generation | 94% / 13% |
-
-The GRU decoder reaches high next-word accuracy on the validation split, but it generalises poorly to new photos. One reason is that the original notebooks split augmented copies of the same photo across train and validation. So by default, the app describes an image with the reference description of the most similar training photo of the predicted type, matched on the same VGG-16 encoder features. The GRU's own caption is still returned (`generated_description`) and shown in the UI, and `?mode=generate` makes it the main output. See [Limitations](#-limitations-and-future-work).
+<!-- METRICS:START -->
+_Metrics are generated automatically by `training/run_all.py` and inserted here by `training/install_results.py` (see [Training and evaluation](#-training-and-evaluation))._
+<!-- METRICS:END -->
 
 ## 🏗️ Architecture
 
-![Architecture](Project%20Documents/System%20Workflow%20Diagram/Architecture.jpg)
+![Architecture](project%20documents/System%20Architecture.jpg)
 
-1. **Shared encoder.** The image is resized to 224×224, ImageNet-normalised and passed **once** through a frozen VGG-16, giving a 7×7×512 feature map.
-2. **Classifier (VGG-16 → GRU).** The 49 spatial feature vectors are read as a sequence by a GRU (hidden 256), and a linear layer predicts *Earring* or *Necklace*.
-3. **Caption decoder (VGG-16 → GRU).** Average-pooled features are projected to 512-d and initialise a GRU language model (embedding 256, hidden 512, vocabulary 2,158). It writes a description using beam search (k = 3, with no repeated 3-grams).
-4. **Description matching.** The pooled features are compared by cosine similarity with those of 5,180 original training photos of the predicted type, and the closest item's description is returned.
+1. **Encoder.** The image is resized to 224×224, ImageNet-normalised and passed **once** through a frozen, ImageNet-pretrained VGG-16, giving a 7×7×512 feature map (49 image regions).
+2. **Classifier (VGG-16 → GRU).** The 49 region vectors are read as a sequence by a GRU (hidden 256), and a linear layer predicts *Earring* or *Necklace*.
+3. **Description decoder (VGG-16 → attention GRU).** A GRU language model (embedding 256, hidden 512) with soft attention over the 49 regions ("Show, Attend and Tell"). At every word it looks at the relevant part of the image. Captions are decoded with beam search (k = 3).
+4. **Description retrieval (baseline).** The most similar training image of the predicted type, by cosine similarity of the same VGG-16 features, provides a reference description. Generation or retrieval becomes the app's default, whichever scores higher on the **validation** set.
 
-### Optimisations in this version
+### Engineering details
 
-- **One VGG-16 pass instead of two.** The classifier and the caption encoder were trained with the same frozen ImageNet backbone. All 26 convolution tensors are identical, so the backbone runs once and feeds both heads. This roughly halves CPU time and saves about 60 MB of RAM. A unit test checks that the outputs match the original encoder.
-- **Incremental decoding.** The GRU hidden state is carried forward rather than re-running the decoder over the whole prefix for every new word, so decoding cost grows with caption length instead of its square. A unit test checks that it produces the original greedy caption exactly.
-- **Batched beam search** with blocking of special tokens and repeated n-grams.
-- **No ImageNet download at start-up**, because the backbone weights are already inside the saved checkpoints. The models are loaded and warmed up once, when the server starts.
-- **Frontend:** images are downscaled in the browser before upload, and transparent PNGs are flattened onto white.
+- **One VGG-16 pass per image**, shared by the classifier and the description decoder.
+- **Feature caching during training.** The frozen VGG-16 features of every image (plus 5 augmented views per training image) are computed once, so all heads train in minutes on a single GPU.
+- **Leakage-free splits.** Train, validation and test are split by photo, with duplicate photos and identical descriptions grouped together. Augmentation is applied only to training images, on the fly.
+- **Incremental, batched decoding** with the GRU state carried forward.
+- The models load once at server start-up, and the frontend downscales images before upload.
 
 ## 📂 Repository structure
 
 ```
 backend/                FastAPI app + model code
   main.py               API: POST /analyze, GET /health; also serves the built frontend
-  caption_model.py      Model definitions + optimised inference pipeline
-  weights/              classifier.pth, encoder.pth, decoder.pth, vocab.pkl, caption_index.npz
-  tests/                pytest suite (API, accuracy checks, optimisation equivalence)
+  caption_model.py      Model definitions + inference pipeline
+  weights/              Trained weights
+  tests/                pytest suite
 frontend/               React + Tailwind UI (drag & drop, paste, sample images)
-training/               Reproducible training / evaluation scripts
-notebooks/              Original Kaggle/Colab notebooks (dataset, augmentation, training)
-dataset/                Label spreadsheets, augmented dataset index, 53-image test set
-Project Documents/      Report, synopsis, technical paper, poster, PPTs, diagrams, metrics, screenshots
+training/               Dataset preparation, training + evaluation pipeline, metrics
+results/                Metrics, plots and test-set predictions of the latest training run
+notebooks/              Original notebooks + Kaggle training notebook
+dataset/                Label files and the 53-image external test set
+project documents/      Report, technical paper, poster, presentations, architecture, screenshots
 experiments/            Earlier Gemini LLM baseline (not used by the app)
-test_images/            Extra sample images
+test_images/            Sample images
 deploy/huggingface/     Hugging Face Space files (live demo)
 Dockerfile              One-container build (frontend + backend)
 ```
@@ -94,42 +80,33 @@ npm start
 ```bash
 curl -F "file=@test_images/1.jpeg" http://localhost:8000/analyze
 ```
-Example response:
 
-```json
-{
-  "type": "Earring",
-  "confidence": 0.9999,
-  "description": "Pair of gold earrings with dangling diamond accents in a crescent moon design.",
-  "method": "retrieved",
-  "similarity": 0.89,
-  "generated_description": "…",
-  "inference_ms": 420
-}
-```
-
-Add `?mode=generate` to get the GRU decoder's caption as the main description.
-
-### Tests
-
-```bash
-cd backend && pip install pytest httpx && pytest -q
-cd frontend && npm test
-```
-
-The tests also run automatically on every push through GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+Response fields: `type`, `confidence`, `description`, `method` (`generated` or `retrieved`), `generated_description` and `inference_ms`. Use `?mode=generate` or `?mode=retrieve` to choose the description method explicitly.
 
 ## 🧪 Training and evaluation
 
-The original notebooks are kept in [`notebooks/`](notebooks). [`training/`](training) contains the same models as command-line scripts, with two fixes: validation is split by **original photo**, so augmented copies don't leak across splits, and VGG-16 features are cached so caption training takes minutes.
+Everything (training, model selection and evaluation) is one command. The test sets are used only for the final evaluation.
 
 ```bash
-pip install -r training/requirements.txt
-python training/train_classifier.py   --csv dataset/labels/augmented_dataset.csv --images <augmented image folder> --out backend/weights/classifier.pth
-python training/train_captioning.py   --csv dataset/labels/augmented_dataset.csv --images <augmented image folder> --out-dir backend/weights
-python training/build_caption_index.py --csv dataset/labels/augmented_dataset.csv --images <augmented image folder> --out backend/weights/caption_index.npz
-python training/evaluate.py           # accuracy, BLEU-4 and latency on dataset/test_set
+# 1. Build the dataset package from the raw image folders (once)
+python training/prepare_dataset.py --raw ../Dataset --labels dataset/labels/master_labels.csv \
+    --external ../Dataset/DESCRIPTION_TEST_DATA --external-labels dataset/test_set/labels.csv \
+    --out ../jewellery-dataset
+
+# 2. Train + evaluate (GPU recommended; on Kaggle use notebooks/04_kaggle_train_and_evaluate.ipynb)
+python training/run_all.py --data ../jewellery-dataset --out run
+
+# 3. Install the trained weights, metrics and plots, and update this README
+python training/install_results.py run.zip
 ```
+
+Reported metrics:
+
+- **Classification:** accuracy, precision, recall and F1 per class and macro-averaged, ROC-AUC and the confusion matrix.
+- **Descriptions:** BLEU-1 to BLEU-4, METEOR, ROUGE-L and CIDEr-D.
+- **Speed:** CPU latency.
+
+All are computed on a held-out test split and on 53 external web images. Training curves and per-image test predictions are saved to [`results/`](results).
 
 ## 🌐 Deployment
 
@@ -140,19 +117,18 @@ The live demo runs as a free Hugging Face Space (Docker, CPU), which builds stra
 3. Wait for the build (~10 min). The app is then live at `https://huggingface.co/spaces/<username>/<space-name>`.
 4. After pushing to GitHub, use **Settings → Factory rebuild** on the Space to update it.
 
-## 📊 Dataset
+## 📁 Dataset
 
-The dataset combines open Hugging Face jewellery datasets (*AI Tool Pool Jewelry Vision*, `imnaveenk/necklace`, `Bhargav1127/necklace-dataset-with-captions`) with manually collected images. 5,307 captioned originals were augmented about 6× (flips, rotations, colour shifts). See [`dataset/README.md`](dataset/README.md). The raw image folders (~450 MB) are not stored in this repository.
+The dataset was built from open Hugging Face jewellery datasets (*AI Tool Pool Jewelry Vision*, `imnaveenk/necklace`, `Bhargav1127/necklace-dataset-with-captions`) plus manually collected images: 5,406 photos (3,548 earrings and 1,858 necklaces), 5,306 of them with a description. See [`dataset/README.md`](dataset/README.md). The image folders are not stored in this repository.
 
-## ⚠️ Limitations and future work
+## ⚠️ Limitations
 
-- **Only two classes.** Earrings and necklaces only; rings, bracelets and so on will be forced into one of the two (the UI flags low-confidence results).
-- **Background sensitivity.** Most training photos are product shots on plain backgrounds. Earrings photographed while worn, or on busy backgrounds, are sometimes classified as necklaces.
-- **Free-form captions.** The GRU decoder tends to reproduce fragments of training captions on unseen images. Retraining with the group-aware split in `training/`, adding attention over the 7×7 feature map, or fine-tuning the upper VGG layers are the natural next steps.
+- Only two classes: earrings and necklaces. Other jewellery is forced into one of the two, and the UI flags low-confidence results.
+- Most training photos are product shots on plain backgrounds, so performance on worn or busy-background photos is lower. The external test set measures this.
 
 ## 🛠️ Tech stack
 
-PyTorch · Torchvision · FastAPI · Uvicorn · React · Tailwind CSS · Axios · NumPy · Pandas · NLTK · Pillow · Docker · GitHub Actions
+PyTorch · Torchvision · FastAPI · Uvicorn · React · Tailwind CSS · Axios · NumPy · Matplotlib · NLTK · Pillow · Docker · GitHub Actions
 
 ## 👥 Team
 
